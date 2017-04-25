@@ -12,6 +12,8 @@ from ecommerce.referrals.models import Referral
 logger = logging.getLogger(__name__)
 
 Order = get_model('order', 'Order')
+OrderLine = get_model('order', 'Line')
+RefundLine = get_model('refund', 'RefundLine')
 
 
 class OrderNumberGenerator(object):
@@ -113,3 +115,23 @@ class OrderCreator(OscarOrderCreator):
             logger.exception('Referral for Order [%d] failed to save.', order.id)
 
         return order
+
+
+class UserAlreadyPlacedOrder(object):
+    @staticmethod
+    def user_already_placed_order(user, product):
+        """
+        checks if the user already have a non refunded order for the product.
+        Args:
+            user: (User)
+            product: (Product)
+
+        Returns:
+                Returns True if user have a non refunded order else False
+        """
+        orders_lines = OrderLine.objects.filter(product=product, order__user=user)
+        if orders_lines:
+            for order_line in orders_lines:
+                if not RefundLine.objects.filter(order_line=order_line).exists():
+                    return True
+        return False

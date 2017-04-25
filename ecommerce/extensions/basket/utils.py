@@ -13,6 +13,8 @@ from ecommerce.referrals.models import Referral
 Applicator = get_class('offer.utils', 'Applicator')
 Basket = get_model('basket', 'Basket')
 StockRecord = get_model('partner', 'StockRecord')
+OrderLine = get_model('order', 'Line')
+Refund = get_model('refund', 'Refund')
 
 logger = logging.getLogger(__name__)
 

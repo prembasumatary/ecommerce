@@ -3,12 +3,15 @@ import logging
 
 import mock
 from django.test.client import RequestFactory
-from oscar.core.loading import get_class
+from oscar.core.loading import get_class, get_model
 from oscar.test.factories import create_basket as oscar_create_basket
+from oscar.test.factories import create_order
 from oscar.test.newfactories import BasketFactory
 from testfixtures import LogCapture
 
 from ecommerce.extensions.fulfillment.status import ORDER
+from ecommerce.extensions.order.utils import UserAlreadyPlacedOrder
+from ecommerce.extensions.refund.tests.factories import RefundFactory
 from ecommerce.referrals.models import Referral
 from ecommerce.tests.factories import PartnerFactory, SiteConfigurationFactory
 from ecommerce.tests.testcases import TestCase
@@ -21,6 +24,7 @@ OrderCreator = get_class('order.utils', 'OrderCreator')
 OrderNumberGenerator = get_class('order.utils', 'OrderNumberGenerator')
 OrderTotalCalculator = get_class('checkout.calculators', 'OrderTotalCalculator')
 ShippingAddress = get_class('order.models', 'ShippingAddress')
+OrderLine = get_model('order', 'Line')
 
 
 class OrderNumberGeneratorTests(TestCase):
@@ -169,3 +173,46 @@ class OrderCreatorTests(TestCase):
             order = self.create_order_model(basket)
             message = 'Referral for Order [{order_id}] failed to save.'.format(order_id=order.id)
             l.check((LOGGER_NAME, 'ERROR', message))
+
+
+class UserAlreadyPlacedOrderTests(TestCase):
+    """
+    Tests for Util class UserAlreadyPlacedOrder
+    """
+    def setUp(self):
+        super(UserAlreadyPlacedOrderTests, self).setUp()
+        self.user = self.create_user()
+        self.order = create_order(user=self.user)
+        self.product = self.get_order_product()
+
+    def get_order_product(self, order=None):
+        """
+        Args:
+            order: if no order given uses self.order
+        Returns:
+            the product order was placed for
+        """
+        order = self.order if not order else order
+        return OrderLine.objects.get(order=order).product
+
+    def test_already_have_not_refunded_order(self):
+        """
+        Test the case that user have a non refunded order for the product.
+        """
+        self.assertTrue(UserAlreadyPlacedOrder.user_already_placed_order(user=self.user, product=self.product))
+
+    def test_no_previous_order(self):
+        """
+        Test the case that user do not have any previous order for the product.
+        """
+        user = self.create_user()
+        self.assertFalse(UserAlreadyPlacedOrder.user_already_placed_order(user=user, product=self.product))
+
+    def test_already_have_refunded_order(self):
+        """
+        Test the case that user have a refunded order for the product.
+        """
+        user = self.create_user()
+        refund = RefundFactory(user=user)
+        product = self.get_order_product(order=refund.order)
+        self.assertFalse(UserAlreadyPlacedOrder.user_already_placed_order(user=user, product=product))
