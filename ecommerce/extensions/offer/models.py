@@ -7,11 +7,13 @@ from django.core.cache import cache
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from oscar.apps.offer.abstract_models import AbstractBenefit, AbstractConditionalOffer, AbstractRange
+from oscar.apps.offer.custom import create_condition
 from requests.exceptions import ConnectionError, Timeout
 from slumber.exceptions import SlumberBaseException
 from threadlocals.threadlocals import get_current_request
 
 from ecommerce.core.utils import get_cache_key, log_message_and_raise_validation_error
+from ecommerce.enterprise.utils import is_user_linked_to_enterprise_customer
 
 
 class Benefit(AbstractBenefit):
@@ -37,6 +39,58 @@ class Benefit(AbstractBenefit):
             log_message_and_raise_validation_error(
                 'Failed to create Benefit. Benefit value may not be a negative number.'
             )
+
+
+class EnterpriseCustomerUserLinkBenefit(Benefit):
+    """
+    This custom benefit covers use cases having to do with establishing relationships between an
+    Open edX user/learner and an enterprise customer (ref: http://github.com/edx/edx-enterprise)
+    """
+    enterprise_customer_uuid = models.UUIDField(
+        help_text='UUID for an EnterpriseCustomer from the Enterprise Service.'
+    )
+
+    # The below code was bootstrapped from the example found at
+    # http://django-oscar.readthedocs.io/en/releases-1.4/howto/how_to_create_a_custom_benefit.html
+
+    # Note that we are adding a new UUID field above -- I am assuming that this cannot be a proxy
+    # model because of this, since the intent of a proxy model is to include additional behavior on
+    # top of an existing model class and in this case we also need to include additional state
+    class Meta:
+        proxy = True
+
+    @property
+    def description(self):
+        """
+        This custom benefit links users to enterprise customers when orders are finalized.
+        """
+
+    def apply(self, basket, condition, offer):
+        """
+        Apply the benefit to the passed basket and mark the appropriate
+        items as consumed.
+
+        The condition and offer are passed as these are sometimes required
+        to implement the correct consumption behaviour.
+
+        Should return an instance of
+        ``oscar.apps.offer.models.ApplicationResult``
+        """
+
+        # TODO: ADD IMPLEMENTATION TO CHECK FOR DATA SHARING CONSENT REQUIREMENT,
+        # AND RESCIND OFFER IF REQUIREMENT HAS NOT BEEN MET.
+
+    def apply_deferred(self, basket, order, application):
+        """
+        Perform a 'post-order action' if one is defined for this benefit
+
+        Should return a message indicating what has happend.  This will be
+        stored with the order to provide audit of post-order benefits.
+        """
+
+        # WE DO NOT NEED A POST-ORDER ACTION TO LINK LEARNERS TO ENTERPRISE CUSTOMERS
+        # BECAUSE LEARNERS WILL ALREADY BE LINKED TO ENTERPRISE CUSTOMERS THROUGH THE
+        # REGISTRATION/AUTHENTICATION PROCESS
 
 
 class ConditionalOffer(AbstractConditionalOffer):

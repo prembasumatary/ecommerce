@@ -364,3 +364,25 @@ def get_enterprise_customer_data_sharing_consent_token(access_token, course_id, 
         digestmod=hashlib.sha256,
     )
     return consent_token_hmac.hexdigest()
+
+
+def is_user_linked_to_enterprise_customer(enterprise_customer_uuid, user):
+    """
+    Does given user belongs to the given enterprise customer ?
+
+    Arguments:
+     enterprise_customer_uuid (string): UUID for the enterprise customer
+     user (User): django user object
+
+    Examples:
+        >>>  from django.contrib.auth.models import User
+        >>>  user = User.objects.first()
+        >>> is_user_linked_to_enterprise_customer("228921dc-b64d-4006-8ac6-g7sl19zz26pl07e", user)
+        False
+
+    Returns:
+        (bool): `True` if given user belongs to enterprise customer `False` of it does not.
+    """
+    if not is_enterprise_feature_enabled():
+        return False
+    return True
