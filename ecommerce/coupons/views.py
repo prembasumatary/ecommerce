@@ -181,8 +181,8 @@ class CouponRedeemView(EdxOrderPlacementMixin, View):
                 }
             )
 
-        if request.user.is_user_already_enrolled(request, product):
-            return render(request, template_name, {'error': _('You are already enrolled in the course.')})
+        #  if request.user.is_user_already_enrolled(request, product):
+            #  return render(request, template_name, {'error': _('You are already enrolled in the course.')})
 
         try:
             enterprise_customer = get_enterprise_customer_from_voucher(request.site, voucher)

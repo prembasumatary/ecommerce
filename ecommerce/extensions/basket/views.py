@@ -20,7 +20,7 @@ from slumber.exceptions import SlumberBaseException
 
 from ecommerce.core.exceptions import SiteConfigurationError
 from ecommerce.core.url_utils import get_lms_url
-from ecommerce.courses.utils import get_certificate_type_display_value, get_course_info_from_catalog, mode_for_seat
+from ecommerce.courses.utils import get_certificate_type_display_value, get_course_info_from_catalog
 from ecommerce.enterprise.entitlements import get_entitlement_voucher
 from ecommerce.enterprise.utils import CONSENT_FAILED_PARAM, get_enterprise_customer_from_voucher
 from ecommerce.extensions.analytics.utils import prepare_analytics_data
@@ -110,20 +110,20 @@ class BasketSingleItemView(View):
         # If the product is not an Enrollment Code and this is a Coupon Redemption request,
         # we check to see if the user is already enrolled
         # to prevent double-enrollment and/or accidental coupon usage.
-        if not product.is_enrollment_code_product and code:
-            try:
-                if request.user.is_user_already_enrolled(request, product):
-                    logger.warning(
-                        'User [%s] attempted to repurchase the [%s] seat of course [%s]',
-                        request.user.username,
-                        mode_for_seat(product),
-                        product.attr.course_key
-                    )
-                    msg = _('You are already enrolled in {course}.').format(course=product.course.name)
-                    return HttpResponseBadRequest(msg)
-            except (ConnectionError, SlumberBaseException, Timeout):
-                msg = _('An error occurred while retrieving enrollment details. Please try again.')
-                return HttpResponseBadRequest(msg)
+        # if not product.is_enrollment_code_product and code:
+        #     try:
+        #         if request.user.is_user_already_enrolled(request, product):
+        #             logger.warning(
+        #                 'User [%s] attempted to repurchase the [%s] seat of course [%s]',
+        #                 request.user.username,
+        #                 mode_for_seat(product),
+        #                 product.attr.course_key
+        #             )
+        #             msg = _('You are already enrolled in {course}.').format(course=product.course.name)
+        #             return HttpResponseBadRequest(msg)
+        #     except (ConnectionError, SlumberBaseException, Timeout):
+        #         msg = _('An error occurred while retrieving enrollment details. Please try again.')
+        #         return HttpResponseBadRequest(msg)
 
         # At this point we're either adding an Enrollment Code product to the basket,
         # or the user is adding a Seat product for which they are not already enrolled
