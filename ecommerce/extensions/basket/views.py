@@ -394,6 +394,7 @@ class BasketSummaryView(BasketView):
 
 class VoucherAddView(BaseVoucherAddView):  # pylint: disable=function-redefined
     def apply_voucher_to_basket(self, voucher):
+        self.request.basket.reset_offer_applications()
         code = voucher.code
         if voucher.is_expired():
             messages.error(

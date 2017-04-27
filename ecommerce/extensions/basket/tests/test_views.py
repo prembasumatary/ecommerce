@@ -45,6 +45,7 @@ Applicator = get_class('offer.utils', 'Applicator')
 Basket = get_model('basket', 'Basket')
 Benefit = get_model('offer', 'Benefit')
 Catalog = get_model('catalogue', 'Catalog')
+ConditionalOffer = get_model('offer', 'ConditionalOffer')
 Product = get_model('catalogue', 'Product')
 ProductAttribute = get_model('catalogue', 'ProductAttribute')
 Selector = get_class('partner.strategy', 'Selector')
@@ -764,6 +765,27 @@ class VoucherAddViewTests(TestCase):
 
         for part in expected_url_parts:
             self.assertIn(part, resp.url)
+
+    def test_coupon_applied_on_site_offer(self):
+        """Coupon offer supersedes site offer."""
+        product_price = 100
+        site_offer_discout = 20
+        voucher_discount = 10
+
+        voucher, product = prepare_voucher(benefit_value=voucher_discount)
+        stockrecord = product.stockrecords.first()
+        stockrecord.price_excl_tax = product_price
+        stockrecord.save()
+
+        _range = factories.RangeFactory(includes_all_products=True)
+        factories.ConditionalOfferFactory(
+            benefit=factories.BenefitFactory(range=_range, value=site_offer_discout),
+            condition=factories.ConditionFactory(range=_range)
+        )
+        self.basket.add_product(product)
+
+        Applicator().apply(self.basket)
+        self.assertEqual(self.basket.total_excl_tax, 90)
 
 
 class VoucherRemoveViewTests(TestCase):
