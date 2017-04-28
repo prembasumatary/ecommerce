@@ -1,19 +1,19 @@
 from __future__ import unicode_literals
 
 import re
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from oscar.apps.offer.abstract_models import AbstractBenefit, AbstractConditionalOffer, AbstractRange
-from oscar.apps.offer.custom import create_condition
+from oscar.apps.offer import results
 from requests.exceptions import ConnectionError, Timeout
 from slumber.exceptions import SlumberBaseException
 from threadlocals.threadlocals import get_current_request
 
 from ecommerce.core.utils import get_cache_key, log_message_and_raise_validation_error
-from ecommerce.enterprise.utils import is_user_linked_to_enterprise_customer
 
 
 class Benefit(AbstractBenefit):
@@ -41,10 +41,12 @@ class Benefit(AbstractBenefit):
             )
 
 
-class EnterpriseCustomerUserLinkBenefit(Benefit):
+class EnterpriseCustomerUserPercentageBenefit(Benefit):
     """
+    An offer benefit that gives a percentage discount for enterprise learners.
+
     This custom benefit covers use cases having to do with establishing relationships between an
-    Open edX user/learner and an enterprise customer (ref: http://github.com/edx/edx-enterprise)
+    Open edX user/learner and an enterprise customer (ref: http://github.com/edx/edx-enterprise).
     """
     enterprise_customer_uuid = models.UUIDField(
         help_text='UUID for an EnterpriseCustomer from the Enterprise Service.'
@@ -56,41 +58,71 @@ class EnterpriseCustomerUserLinkBenefit(Benefit):
     # Note that we are adding a new UUID field above -- I am assuming that this cannot be a proxy
     # model because of this, since the intent of a proxy model is to include additional behavior on
     # top of an existing model class and in this case we also need to include additional state
-    class Meta:
-        proxy = True
+    _description = _("%(value)s%% enterprise entitlement discount on %(range)s")
+
+    @property
+    def name(self):
+        return self._description % {
+            'value': self.value,
+            'range': self.range.name
+        }
 
     @property
     def description(self):
-        """
-        This custom benefit links users to enterprise customers when orders are finalized.
-        """
+        return self._description % {
+            'value': self.value,
+            'range': self.range.name
+        }
 
-    def apply(self, basket, condition, offer):
-        """
-        Apply the benefit to the passed basket and mark the appropriate
-        items as consumed.
+    class Meta:
+        app_label = 'offer'
+        verbose_name = _("Percentage enterprise entitlement discount benefit")
+        verbose_name_plural = _("Percentage enterprise entitlement discount benefits")
 
-        The condition and offer are passed as these are sometimes required
-        to implement the correct consumption behaviour.
+    def apply(self, basket, condition, offer, discount_percent=None, max_total_discount=None):
+        # imports are added here to avoid circular import
+        from ecommerce.enterprise.utils import is_user_linked_to_enterprise_customer
 
-        Should return an instance of
-        ``oscar.apps.offer.models.ApplicationResult``
-        """
+        if not is_user_linked_to_enterprise_customer(self.enterprise_customer_uuid, basket.owner):
+            return results.BasketDiscount(Decimal('0.0'))
 
-        # TODO: ADD IMPLEMENTATION TO CHECK FOR DATA SHARING CONSENT REQUIREMENT,
-        # AND RESCIND OFFER IF REQUIREMENT HAS NOT BEEN MET.
+        # TODO: Add check for data sharing consent
 
-    def apply_deferred(self, basket, order, application):
-        """
-        Perform a 'post-order action' if one is defined for this benefit
+        if discount_percent is None:
+            discount_percent = self.value
 
-        Should return a message indicating what has happend.  This will be
-        stored with the order to provide audit of post-order benefits.
-        """
+        discount_amount_available = max_total_discount
 
-        # WE DO NOT NEED A POST-ORDER ACTION TO LINK LEARNERS TO ENTERPRISE CUSTOMERS
-        # BECAUSE LEARNERS WILL ALREADY BE LINKED TO ENTERPRISE CUSTOMERS THROUGH THE
-        # REGISTRATION/AUTHENTICATION PROCESS
+        line_tuples = self.get_applicable_lines(offer, basket)
+        discount_percent = min(discount_percent, Decimal('100.0'))
+        discount = Decimal('0.00')
+        affected_items = 0
+        max_affected_items = self._effective_max_affected_items()
+        affected_lines = []
+        for price, line in line_tuples:
+            if affected_items >= max_affected_items:
+                break
+            if discount_amount_available == 0:
+                break
+
+            quantity_affected = min(line.quantity_without_discount,
+                                    max_affected_items - affected_items)
+            line_discount = self.round(discount_percent / Decimal('100.0') * price
+                                       * int(quantity_affected))
+
+            if discount_amount_available is not None:
+                line_discount = min(line_discount, discount_amount_available)
+                discount_amount_available -= line_discount
+
+            line.discount(line, line_discount, quantity_affected)
+
+            affected_lines.append((line, line_discount, quantity_affected))
+            affected_items += quantity_affected
+            discount += line_discount
+
+        if discount > 0:
+            condition.consume_items(offer, basket, affected_lines)
+        return results.BasketDiscount(discount)
 
 
 class ConditionalOffer(AbstractConditionalOffer):

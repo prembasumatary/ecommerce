@@ -385,4 +385,6 @@ def is_user_linked_to_enterprise_customer(enterprise_customer_uuid, user):
     """
     if not is_enterprise_feature_enabled():
         return False
+
+    # TODO: Update this and remove dummy return value
     return True
